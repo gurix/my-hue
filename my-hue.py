@@ -1,0 +1,66 @@
+"""Example script for using AIOHue connecting to a V2 Hue bridge."""
+
+import argparse
+import asyncio
+import contextlib
+import logging
+import yaml
+
+from aiohue import HueBridgeV2
+
+parser = argparse.ArgumentParser(description="AIOHue Example")
+parser.add_argument("--debug", help="enable debug logging", action="store_true")
+args = parser.parse_args()
+
+async def main():
+    """Run Main execution."""
+    if args.debug:
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format="%(asctime)-15s %(levelname)-5s %(name)s -- %(message)s",
+        )
+    
+    # FIXME: Refactor this into own module
+    with open("hue_config.yaml", "r") as yaml_file:
+            config_data = yaml.safe_load(yaml_file)  # Safely parse the YAML data    
+    ip_address = config_data.get("ip_address")
+    appkey = config_data.get("appkey")
+
+    async with HueBridgeV2(ip_address, appkey) as bridge:
+        print("Connected to bridge: ", bridge.bridge_id)
+        print(bridge.config.bridge_device)
+
+        print()
+        print("found devices:")
+        for item in bridge.devices:
+            print(item.metadata.name)
+
+        # turn on a light
+        light = next(x for x in bridge.lights.items if x.supports_color)
+        print("Turning on light", light.id)
+        await bridge.lights.turn_on(light.id)
+        await asyncio.sleep(1)
+        print("Set brightness 100 to light", light.id)
+        await bridge.lights.set_brightness(light.id, 100, 2000)
+        await asyncio.sleep(2)
+        print("Set color to light", light.id)
+        await bridge.lights.set_color(light.id, 0.141, 0.123, 2000)
+        await asyncio.sleep(1)
+        print("Turning off light", light.id)
+        await bridge.lights.turn_off(light.id, 2000)
+
+        print()
+        print("Subscribing to events...")
+
+        def print_event(event_type, item):
+            print()
+            print("received event", event_type.value, item)
+            print()
+
+        bridge.subscribe(print_event)
+
+        await asyncio.sleep(3600)
+
+
+with contextlib.suppress(KeyboardInterrupt):
+    asyncio.run(main())
